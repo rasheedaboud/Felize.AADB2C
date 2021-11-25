@@ -106,5 +106,11 @@ type TokenRequest ={
 AccountInfo can be aquired by calling `getAccountByUsername()` on PublicClientApplication instance.
 
 
+## Hooks
 
+the following react hook from msal react are supported;  
 
+1. useAccount
+2. useIsAuthenticated
+3. useMsal
+4. useMsalAuthentication
