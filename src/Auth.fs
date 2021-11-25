@@ -5,6 +5,22 @@ open Fable.Core.JsInterop
 open Feliz
 open System
 open Fable.Core.JS
+open System.Collections.Generic
+
+
+
+let msalProvider : obj = import "MsalProvider" "@azure/msal-react"
+let authenticatedTemplate : obj = import "AuthenticatedTemplate"   "@azure/msal-react"
+let unauthenticatedTemplate : obj = import "UnauthenticatedTemplate"   "@azure/msal-react"
+
+
+
+///<summary>The useIsAuthenticated hook returns a boolean indicating whether or not an account is signed in. 
+/// It optionally accepts an accountIdentifier object you can provide if you need to know whether or not 
+/// a specific account is signed in.</summary
+let useIsAuthenticated() : bool= import "useIsAuthenticated" "@azure/msal-react"
+
+
 
 ////////////////////////////////////
 /// Extend this type with any additional claims you want to 
@@ -36,39 +52,7 @@ type IdTokenClaims =
     member this.DisplayName =
         $"{this.given_name.[0]}.{this.family_name}"
 
-    static member Default() = {
-        aud=""
-        auth_time=""
-        emails= [||]
-        exp= 0
-        family_name=""
-        given_name=""
-        iat=0
-        iss=""
-        nbf=0
-        nonce=""
-        sub=""
-        tfp=""
-        ver=""}
 
-type account = {
-  length:int
-  environment: string
-  homeAccountId: string
-  idTokenClaims:IdTokenClaims
-  localAccountId: string
-  name: string
-  tenantId: string
-  username:string}
-  with static member Deafult()= {
-        length=0
-        environment=""
-        homeAccountId=""
-        idTokenClaims=IdTokenClaims.Default()
-        localAccountId=""
-        name=""
-        tenantId=""
-        username=""}
 
 type AccountInfo = {
     homeAccountId: string;
@@ -77,8 +61,20 @@ type AccountInfo = {
     username: string;
     localAccountId: string;
     name: string;
-    idTokenClaims: obj;
+    idTokenClaims: IdTokenClaims;
 };
+
+type AccountIdentifiers = 
+  | [<CompiledName("localAccount")>]LocalAccount of string
+  | [<CompiledName("homeAccount")>]HomeAccount of string
+  | [<CompiledName("username")>]Username of string
+
+///<summary>The useAccount hook accepts an accountIdentifier parameter and returns the AccountInfo object for 
+/// that account if it is signed in or null if it is not. You can read more about the AccountInfo object 
+/// returned in the @azure/msal-browser docs here.</summary
+/// <seealso cref="https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#account-apis"/>
+let useAccount (identifier:AccountIdentifiers) : AccountInfo= import "useAccount " "@azure/msal-react"
+
 
 ///<summary>Used to request scopes when requesting token</summary>
 type TokenRequest ={
@@ -87,8 +83,11 @@ type TokenRequest ={
   forceRefresh:bool
 }
 
-
-
+type CommonSilentFlowRequest = {
+    account: AccountInfo
+    forceRefresh: bool
+    tokenQueryParameters: Dictionary<string,string>;
+}
 
 type AuthenticationResult = {
     authority: string;
@@ -97,7 +96,7 @@ type AuthenticationResult = {
     scopes: string[];
     account: AccountInfo option;
     idToken: string;
-    idTokenClaims: obj;
+    idTokenClaims: IdTokenClaims;
     accessToken: string;
     fromCache: bool;
     expiresOn:DateTime option;
@@ -108,30 +107,64 @@ type AuthenticationResult = {
     familyId: string;
     cloudGraphHostName: string;
     msGraphHost: string;
-};
+}
+
+type RedirectRequest = {
+    account: AccountInfo
+    postLogoutRedirectUri: string
+}
 
 
-let msalProvider : obj = import "MsalProvider" "@azure/msal-react"
-let authenticatedTemplate : obj = import "AuthenticatedTemplate"   "@azure/msal-react"
-let unauthenticatedTemplate : obj = import "UnauthenticatedTemplate"   "@azure/msal-react"
-let useIsAuthenticated() : bool= import "useIsAuthenticated" "@azure/msal-react"
-
-
+type IPublicClientApplication = 
+    abstract member loginRedirect: request:obj -> Promise<unit>;
+    abstract member loginPopup: request:obj -> Promise<AuthenticationResult option>
+    abstract member logout: unit-> unit
+    abstract member logoutRedirect: request:RedirectRequest -> Promise<unit>
+    abstract member getAllAccounts: unit-> AccountInfo[] 
+    abstract member acquireTokenSilent: request:obj -> Promise<AuthenticationResult option>;
+    abstract member getAccountByUsername:userName: string -> AccountInfo option
 
 [<Import("PublicClientApplication", from="@azure/msal-browser")>]
 type PublicClientApplication (config:obj) =
-    abstract member loginRedirect: request:obj -> Promise<unit>;
-    default this.loginRedirect(request:obj) = jsNative  
-    abstract member loginPopup: request:obj -> Promise<AuthenticationResult option>
-    default this.loginPopup(request:obj) = jsNative
-    abstract member logout: unit-> unit
-    default this.logout() = jsNative
-    abstract member getAllAccounts: unit-> account[] 
-    default this.getAllAccounts() : account[] = jsNative
-    abstract member acquireTokenSilent: request:obj -> Promise<AuthenticationResult option>;
-    default this.acquireTokenSilent(request:obj) = jsNative
-    abstract member getAccountByUsername:userName: string -> AccountInfo option
-    default this.getAccountByUsername(userName:string) = jsNative
+    interface IPublicClientApplication with
+      member _.loginRedirect(request:obj) = jsNative  
+      member _.loginPopup(request:obj) = jsNative
+      member _.logout() = jsNative
+      member _.logoutRedirect(request:RedirectRequest) = jsNative
+      member _.getAllAccounts() : AccountInfo[] = jsNative
+      member _.acquireTokenSilent(request:obj) = jsNative
+      member _.getAccountByUsername(userName:string) = jsNative
+
+
+
+type [<StringEnum>] [<RequireQualifiedAccess>] InteractionStatus =
+    /// Initial status before interaction occurs
+    | Startup
+    /// Status set when all login calls occuring
+    | Login
+    /// Status set when logout call occuring
+    | Logout
+    /// Status set for acquireToken calls
+    | AcquireToken
+    /// Status set for ssoSilent calls
+    | SsoSilent
+    /// Status set when handleRedirect in progress
+    | HandleRedirect
+    /// Status set when interaction is complete
+    | None
+
+type IMsalContext =
+    abstract member instance: IPublicClientApplication with get,set
+    abstract member inProgress: InteractionStatus;
+    abstract member accounts: AccountInfo[];
+
+///<summary>The useAccount hook accepts an accountIdentifier parameter and returns the AccountInfo object for 
+/// that account if it is signed in or null if it is not. You can read more about the AccountInfo object 
+/// returned in the @azure/msal-browser docs here.</summary
+/// <seealso cref="https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#account-apis"/>
+let useMsal(): IMsalContext= import "useMsal " "@azure/msal-react"
+
+
 
 /// <summary>All components underneath MsalProvider will have access to the PublicClientApplication instance via 
 /// context as well as all hooks and components provided by @azure/msal-react.
@@ -178,4 +211,4 @@ let msalConfig ={|
 
 
 
-let client = PublicClientApplication(msalConfig);
+let client = PublicClientApplication(msalConfig) :> IPublicClientApplication

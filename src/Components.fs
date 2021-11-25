@@ -143,7 +143,8 @@ type Components =
                 //Can do something with token here or let framework handle setting
                 //with let isLoggedIn = useIsAuthenticated() above.
                 match auth with
-                | Some result -> ()
+                | Some result -> 
+                        ()
                 | None -> ()               
             }
         
