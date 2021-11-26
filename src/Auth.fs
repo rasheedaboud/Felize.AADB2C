@@ -15,9 +15,9 @@ let unauthenticatedTemplate : obj = import "UnauthenticatedTemplate"   "@azure/m
 
 
 
-///<summary>The useIsAuthenticated hook returns a boolean indicating whether or not an account is signed in. 
+///The useIsAuthenticated hook returns a boolean indicating whether or not an account is signed in. 
 /// It optionally accepts an accountIdentifier object you can provide if you need to know whether or not 
-/// a specific account is signed in.</summary
+/// a specific account is signed in.
 let useIsAuthenticated() : bool= import "useIsAuthenticated" "@azure/msal-react"
 
 
@@ -69,10 +69,10 @@ type AccountIdentifiers =
   | [<CompiledName("homeAccount")>]HomeAccount of string
   | [<CompiledName("username")>]Username of string
 
-///<summary>The useAccount hook accepts an accountIdentifier parameter and returns the AccountInfo object for 
+///The useAccount hook accepts an accountIdentifier parameter and returns the AccountInfo object for 
 /// that account if it is signed in or null if it is not. You can read more about the AccountInfo object 
-/// returned in the @azure/msal-browser docs here.</summary
-/// <seealso cref="https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#account-apis"/>
+/// returned in the @azure/msal-browser docs here.
+/// https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#account-apis
 let useAccount (identifier:AccountIdentifiers) : AccountInfo= import "useAccount " "@azure/msal-react"
 
 
@@ -110,14 +110,14 @@ type AuthenticationResult = {
 }
 
 type RedirectRequest = {
-    account: AccountInfo
-    postLogoutRedirectUri: string
+    authority:string option
+    account: AccountInfo option
+    postLogoutRedirectUri: string option
 }
 
-
 type IPublicClientApplication = 
-    abstract member loginRedirect: request:obj -> Promise<unit>;
-    abstract member loginPopup: request:obj -> Promise<AuthenticationResult option>
+    abstract member loginRedirect: request:RedirectRequest -> unit;
+    abstract member loginPopup: request:obj -> Promise<AuthenticationResult>
     abstract member logout: unit-> unit
     abstract member logoutRedirect: request:RedirectRequest -> Promise<unit>
     abstract member getAllAccounts: unit-> AccountInfo[] 
@@ -127,7 +127,7 @@ type IPublicClientApplication =
 [<Import("PublicClientApplication", from="@azure/msal-browser")>]
 type PublicClientApplication (config:obj) =
     interface IPublicClientApplication with
-      member _.loginRedirect(request:obj) = jsNative  
+      member _.loginRedirect(request:RedirectRequest) = jsNative  
       member _.loginPopup(request:obj) = jsNative
       member _.logout() = jsNative
       member _.logoutRedirect(request:RedirectRequest) = jsNative
@@ -158,10 +158,10 @@ type IMsalContext =
     abstract member inProgress: InteractionStatus;
     abstract member accounts: AccountInfo[];
 
-///<summary>The useAccount hook accepts an accountIdentifier parameter and returns the AccountInfo object for 
+///The useAccount hook accepts an accountIdentifier parameter and returns the AccountInfo object for 
 /// that account if it is signed in or null if it is not. You can read more about the AccountInfo object 
-/// returned in the @azure/msal-browser docs here.</summary
-/// <seealso cref="https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#account-apis"/>
+/// returned in the @azure/msal-browser docs here.
+/// https://github.com/AzureAD/microsoft-authentication-library-for-js/blob/dev/lib/msal-browser/docs/login-user.md#account-apis
 let useMsal(): IMsalContext= import "useMsal " "@azure/msal-react"
 
 
@@ -193,6 +193,9 @@ type UnauthenticatedTemplate  =
   static member inline create props = Interop.reactApi.createElement (unauthenticatedTemplate, createObj !!props)
 
 
+
+
+
 //////////////////////////////////////////
 /// CHANGE ME
 /// MORE INFO https://docs.microsoft.com/en-us/azure/active-directory-b2c/tutorial-create-tenant
@@ -200,8 +203,8 @@ type UnauthenticatedTemplate  =
 /// //////////////////////////////////////
 let msalConfig ={|
     auth={|
-          clientId="<clientId>"
-          authority="https://<domain>.b2clogin.com/<domain>.onmicrosoft.com/<SingInFlow>"
+          clientId=""
+          authority="https://<domain>.b2clogin.com/<domain>.onmicrosoft.com/<Sign in flow>"
           knownAuthorities=[|"https://<domain>.b2clogin.com"|]
           redirectUri= "https://localhost:8080/"
           postLogoutRedirectUri = "https://localhost:8080/"|};
@@ -209,6 +212,21 @@ let msalConfig ={|
   |}
 
 
+let forgotPassword (error:string) =
+  error.Contains("AADB2C90118")
 
+///Use this to request token from auth server
+let tokenRequest account = {
+      account= account                        
+      scopes= [|""|]
+      forceRefresh=false
+  }
+
+///Send request to server to reset user password.
+let forgotPasswordRequest:RedirectRequest = {
+    account = None
+    authority=Some "https://<domain>.b2clogin.com/<domain>.onmicrosoft.com/<Reset Password Flow>"
+    postLogoutRedirectUri=Some "https://localhost:8080/" 
+}
 
 let client = PublicClientApplication(msalConfig) :> IPublicClientApplication

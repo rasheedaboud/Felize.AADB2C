@@ -7,6 +7,7 @@ open Feliz
 open Feliz.MaterialUI
 open Feliz.Router
 open Styles
+open Browser.Dom
 
 ////////////////////////////
 ///  Imports
@@ -78,13 +79,8 @@ type Components =
         let aquireToken() =
             match client.getAccountByUsername("rasheedaboud@arcweldinginspection.com") with
             | Some account ->
-                Browser.Dom.console.log(account)
                 promise {               
-                    let request = {
-                        account= account                        
-                        scopes= [||]
-                        forceRefresh=false
-                    }
+                    let request = tokenRequest account
 
                     let! token =  client.acquireTokenSilent(request)
                     match token with
@@ -133,22 +129,27 @@ type Components =
         let (isDrawerOpen, setOpen) = React.useState(false)
         let (currentUrl, updateCurrentUrl) = React.useState(Router.currentUrl())            
         let accounts = client.getAllAccounts()
-        //MSAL React helper to check if user is authenticated.
+        //MSAL React hook to check if user is authenticated.
         let isLoggedIn = useIsAuthenticated()
         let (currentUser,setUser) = React.useState(User.Default )
 
         let login() =
-            promise {
-                let! auth = client.loginPopup()
-                //Can do something with token here or let framework handle setting
-                //with let isLoggedIn = useIsAuthenticated() above.
-                match auth with
-                | Some result -> 
-                        ()
-                | None -> ()               
-            }
+            client.loginPopup()
+            |> Promise.map (fun response ->
+                // Do something with IdToken or let msal log user in and use elmish or react hook
+                //to create user object
+                ()
+            )
+            ///with msal you have to catch login error check for forgot password code AADB2C90118
+            /// Then redirect using forgot passowrd flow...
+            |> Promise.catch(fun error -> 
+                if forgotPassword error.Message then 
+                    client.loginRedirect forgotPasswordRequest
+                else
+                    failwith error.Message
+            )                   
+            
         
-
 
         let createUser() =
             if isLoggedIn  
